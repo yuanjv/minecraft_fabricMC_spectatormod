@@ -3,6 +3,7 @@ package yuanjv.spectatormod;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -88,17 +89,52 @@ public class SpectatorMod implements ModInitializer {
             return ActionResult.PASS;
         });
 
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            // Create a copy of the entries to avoid concurrent modification
+            for (Map.Entry<ServerPlayerEntity, SpectateData> entry : new HashMap<>(spectators).entrySet()) {
+                ServerPlayerEntity source = entry.getKey();
+                SpectateData spectateData = entry.getValue();
+
+                // prevent race
+                if (spectateData == null) {
+                    continue;
+                }
+
+                ServerPlayerEntity target = spectateData.target;
+
+                // Additional checks to ensure the spectating session is valid
+                if (!target.isAlive()) { //|| !server.getPlayerManager().getPlayer(target.getUuid()).equals(target)) {
+                    stopSpectating(source);
+                    continue;
+                }
+
+                // Check if target's dimension or position has changed
+                if (!target.getWorld().getRegistryKey().equals(source.getWorld().getRegistryKey())) {
+                    source.teleport(
+                            target.getServerWorld(),
+                            target.getX(),
+                            target.getY(),
+                            target.getZ(),
+                            Set.of(),
+                            target.getYaw(),
+                            target.getPitch(),
+                            false
+                    );
+                    source.getServer().executeSync(() -> {
+                        source.setCameraEntity(target);
+                    });
+                }
+            }
+        });
+
 
     }
 
     private void startSpectating(ServerPlayerEntity source, ServerPlayerEntity target) {
-        GameMode sourceGamemode = GameMode.SURVIVAL;
-        if (source.isSpectator()) {
-            sourceGamemode = GameMode.SPECTATOR;
-        }
-        if (source.isCreative()) {
-            sourceGamemode = GameMode.CREATIVE;
-        }
+        GameMode sourceGamemode = source.isSpectator() ? GameMode.SPECTATOR
+                : source.isCreative() ? GameMode.CREATIVE
+                : GameMode.SURVIVAL;
+
         SpectateData spectateData = new SpectateData(
                 source.getPos(),
                 source.getYaw(),
@@ -112,9 +148,6 @@ public class SpectatorMod implements ModInitializer {
         if (source.getVehicle() != null) {
             source.stopRiding();
         }
-
-
-        spectators.put(source, spectateData);
         source.changeGameMode(GameMode.SPECTATOR);
 
         source.teleport(
@@ -127,8 +160,13 @@ public class SpectatorMod implements ModInitializer {
                 target.getPitch(),
                 false
         );
+        // Delay setting camera entity to ensure dimension transfer is complete
+        source.getServer().executeSync(() -> {
+            source.setCameraEntity(target);
+        });
 
-        source.setCameraEntity(target);
+        //prevent race
+        spectators.put(source, spectateData);
 
     }
 
@@ -159,9 +197,12 @@ public class SpectatorMod implements ModInitializer {
 
 
         source.changeGameMode(spectateData.gameMode);
-        if (spectateData.vehicle != null) {
-            source.startRiding(spectateData.vehicle, true);
-        }
+
+        source.getServer().executeSync(() -> {
+            if (spectateData.vehicle != null) {
+                source.startRiding(spectateData.vehicle, true);
+            }
+        });
 
     }
 
