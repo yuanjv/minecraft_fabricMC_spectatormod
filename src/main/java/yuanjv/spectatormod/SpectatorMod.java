@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -20,7 +19,6 @@ import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -94,12 +92,12 @@ public class SpectatorMod implements ModInitializer {
     }
 
     private void startSpectating(ServerPlayerEntity source, ServerPlayerEntity target) {
-        GameMode sourceGamemode=GameMode.SURVIVAL;
-        if (source.isSpectator()){
-            sourceGamemode=GameMode.SPECTATOR;
+        GameMode sourceGamemode = GameMode.SURVIVAL;
+        if (source.isSpectator()) {
+            sourceGamemode = GameMode.SPECTATOR;
         }
-        if (source.isCreative()){
-            sourceGamemode=GameMode.CREATIVE;
+        if (source.isCreative()) {
+            sourceGamemode = GameMode.CREATIVE;
         }
         SpectateData spectateData = new SpectateData(
                 source.getPos(),
@@ -114,7 +112,6 @@ public class SpectatorMod implements ModInitializer {
         if (source.getVehicle() != null) {
             source.stopRiding();
         }
-
 
 
         spectators.put(source, spectateData);
