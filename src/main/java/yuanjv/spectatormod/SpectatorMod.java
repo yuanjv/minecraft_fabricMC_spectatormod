@@ -98,6 +98,11 @@ public class SpectatorMod implements ModInitializer {
 	}
 	private void startSpectating(ServerPlayerEntity sourcePlayer, ServerPlayerEntity targetPlayer) {
 		BotPlayerEntity bot=new BotPlayerEntity(sourcePlayer);
+		sourcePlayer.getServer().getPlayerManager().onPlayerConnect(
+				new ClientConnection(NetworkSide.SERVERBOUND),
+				bot,
+				ConnectedClientData.createDefault(bot.getGameProfile(), false)
+		);
 	};
 	private void stopSpectating(ServerPlayerEntity sourcePlayer) {}
 

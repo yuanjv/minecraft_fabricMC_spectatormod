@@ -3,11 +3,12 @@ package yuanjv.spectatormod;
 
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.ClientConnection;
+import net.minecraft.network.NetworkSide;
 import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ConnectedClientData;
+import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.world.World;
 import com.mojang.authlib.GameProfile;
 
 import java.util.UUID;
@@ -19,14 +20,24 @@ public class BotPlayerEntity extends ServerPlayerEntity {
 
         // Clone entire player data via NBT
         clonePlayerData(spawner);
+
+        this.networkHandler=new DummyNetworkHandler(this);
     }
 
     private static GameProfile createBotGameProfile(ServerPlayerEntity spawner) {
         // Create a new game profile with a new UUID, but similar name
         return new GameProfile(UUID.randomUUID(), spawner.getGameProfile().getName() + "_Bot");
     }
+    // Inner class to create a dummy network handler
+    static class DummyNetworkHandler extends ServerPlayNetworkHandler {
+        public DummyNetworkHandler(ServerPlayerEntity player) {
+            // Pass a fake client connection and the player to the parent constructor
+            super(player.getServer(),new ClientConnection(NetworkSide.SERVERBOUND), player, ConnectedClientData.createDefault(player.getGameProfile(), false));
+        }
+    }
 
-    private void clonePlayerData(ServerPlayerEntity spawner) {
+
+        private void clonePlayerData(ServerPlayerEntity spawner) {
         // Write spawner's data to an NBT compound
         NbtCompound spawnerNbt = new NbtCompound();
         spawner.writeNbt(spawnerNbt);
