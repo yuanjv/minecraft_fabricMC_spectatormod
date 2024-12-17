@@ -10,7 +10,9 @@ import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.text.Text;
 
+import javax.crypto.Cipher;
 import java.util.UUID;
 
 public class BotPlayerEntity extends ServerPlayerEntity {
@@ -28,11 +30,36 @@ public class BotPlayerEntity extends ServerPlayerEntity {
         // Create a new game profile with a new UUID, but similar name
         return new GameProfile(UUID.randomUUID(), spawner.getGameProfile().getName() + "_Bot");
     }
-    // Inner class to create a dummy network handler
     static class DummyNetworkHandler extends ServerPlayNetworkHandler {
         public DummyNetworkHandler(ServerPlayerEntity player) {
-            // Pass a fake client connection and the player to the parent constructor
-            super(player.getServer(),new ClientConnection(NetworkSide.SERVERBOUND), player, ConnectedClientData.createDefault(player.getGameProfile(), false));
+            super(
+                    player.getServer(),
+                    new ClientConnection(NetworkSide.SERVERBOUND) {
+                        @Override
+                        public void setupEncryption(Cipher decryptionCipher, Cipher encryptionCipher) {
+                            // Override to prevent null channel issues
+                        }
+
+                        @Override
+                        public boolean isOpen() {
+                            return false; // Simulate a closed connection for the bot
+                        }
+                    },
+                    player,
+                    ConnectedClientData.createDefault(player.getGameProfile(), false)
+            );
+        }
+
+        @Override
+        public void sendPacket(net.minecraft.network.packet.Packet<?> packet) {
+            // Override to prevent null pointer exceptions when sending packets
+            // You can add logging or additional handling here if needed
+        }
+
+        @Override
+        public void disconnect(Text reason) {
+            // Override disconnect to prevent network-related errors
+            player.remove(RemovalReason.DISCARDED);
         }
     }
 
