@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "spectatormod",
+	"version": "${version}",
+	"name": "SpectatorMod",
+	"description": "spectator mod by yuanjv",
+	"authors": [
+		"yuanjv"
+	],
+
+	"icon": "assets/spectatormod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"yuanjv.spectatormod.SpectatorMod"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.16.9",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
