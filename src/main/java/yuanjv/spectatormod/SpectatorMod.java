@@ -5,8 +5,6 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
@@ -18,8 +16,10 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.TeleportTarget;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class SpectatorMod implements ModInitializer {
 
@@ -86,31 +86,6 @@ public class SpectatorMod implements ModInitializer {
             }
             return ActionResult.PASS;
         });
-        UseBlockCallback.EVENT.register(
-                (player, world, hand, hitResult) -> {
-                    if (spectators.containsKey(player)) {
-                        return ActionResult.FAIL;
-                    }
-                    return ActionResult.PASS;
-                }
-        );
-        UseItemCallback.EVENT.register(
-                (player, world, hand) -> {
-                    if (spectators.containsKey(player)) {
-                        return ActionResult.FAIL;
-                    }
-                    return ActionResult.PASS;
-                }
-        );
-
-        UseItemCallback.EVENT.register(
-                (player, world, hand) -> {
-                    if (spectators.containsKey(player)) {
-                        return ActionResult.FAIL;
-                    }
-                    return ActionResult.PASS;
-                }
-        );
 
 
     }
@@ -133,33 +108,22 @@ public class SpectatorMod implements ModInitializer {
 
         spectators.put(source, spectateData);
 
-        // Use CompletableFuture to ensure dimension is loaded
-        CompletableFuture<Void> dimensionLoadFuture = new CompletableFuture<>();
+        // Wait for the target's world to load by scheduling a task
+        source.getServer().execute(() -> {
 
-        source.getServer().executeSync(() -> {
-                    source.teleport(
-                            target.getServerWorld(),
-                            0,
-                            0,
-                            0,
-                            Set.of(),
-                            target.getYaw(),
-                            target.getPitch(),
-                            false
-                    );
+            source.teleport(
+                    target.getServerWorld(),
+                    target.getX(),
+                    target.getY(),
+                    target.getZ(),
+                    Set.of(),
+                    target.getYaw(),
+                    target.getPitch(),
+                    false
+            );
+            source.setCameraEntity(target);
 
-                    // Wait a short tick to ensure complete loading
-                    source.getServer().executeSync(() -> {
-                        // Set camera entity
-                        source.setCameraEntity(target);
-                        dimensionLoadFuture.complete(null);
-                    });
-                }
-        );
-
-
-        // Set the camera to the target
-        source.setCameraEntity(target);
+        });
 
     }
 
@@ -172,12 +136,7 @@ public class SpectatorMod implements ModInitializer {
         // Restore the source player's camera and position
         SpectateData spectateData = spectators.remove(source);
         source.setCameraEntity(source);
-
-        // Use CompletableFuture to ensure dimension is loaded
-        CompletableFuture<Void> dimensionLoadFuture = new CompletableFuture<>();
-
-        source.getServer().executeSync(() -> {
-            // Teleport to target's world and position
+        source.getServer().execute(() -> {
             source.teleportTo(
                     new TeleportTarget(
                             source.getServer().getWorld(spectateData.dimension),
@@ -192,14 +151,15 @@ public class SpectatorMod implements ModInitializer {
                     )
             );
 
-            // Wait a short tick to ensure complete loading
-            source.getServer().executeSync(() -> {
-                if (spectateData.vehicle != null) {
-                    source.startRiding(spectateData.vehicle, true);
-                }
-                //source.getInventory().main.add(spectateData.inventory);
-                dimensionLoadFuture.complete(null);
-            });
+            //TODO: wait the dimension to load
+            if (spectateData.vehicle != null) {
+                source.startRiding(spectateData.vehicle, true);
+            }
+            //TODO: restore the inventory
+            source.getInventory().clear();
+            for (ItemStack item : spectateData.inventory) {
+                source.getInventory().insertStack(item);
+            }
         });
 
 
