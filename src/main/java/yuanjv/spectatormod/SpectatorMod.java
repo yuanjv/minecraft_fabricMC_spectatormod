@@ -97,73 +97,10 @@ public class SpectatorMod implements ModInitializer {
 		});
 	}
 	private void startSpectating(ServerPlayerEntity sourcePlayer, ServerPlayerEntity targetPlayer) {
-		copyPlayer(sourcePlayer);
-	}
+		BotPlayerEntity bot=new BotPlayerEntity(sourcePlayer);
+	};
 	private void stopSpectating(ServerPlayerEntity sourcePlayer) {}
-	public static void copyPlayer(ServerPlayerEntity sourcePlayer) {
-		// Create a new GameProfile
-		GameProfile newProfile = new GameProfile(UUID.randomUUID(), sourcePlayer.getGameProfile().getName() + "_copy");
 
-		// Copy texture properties if present
-		if (sourcePlayer.getGameProfile().getProperties().containsKey("textures")) {
-			Property texture = sourcePlayer.getGameProfile().getProperties().get("textures").iterator().next();
-			newProfile.getProperties().put("textures", new Property("textures", texture.value(), texture.signature()));
-		}
-
-		// Create the new player entity
-		ServerPlayerEntity newPlayer = new ServerPlayerEntity(
-				sourcePlayer.getServer(),
-				sourcePlayer.getServerWorld(),
-				newProfile,
-				SyncedClientOptions.createDefault()
-		);
-
-		// Copy player state
-		newPlayer.refreshPositionAndAngles(
-				sourcePlayer.getX(),
-				sourcePlayer.getY(),
-				sourcePlayer.getZ(),
-				sourcePlayer.getYaw(),
-				sourcePlayer.getPitch()
-		);
-
-		// Copy inventory
-		for (int i = 0; i < sourcePlayer.getInventory().size(); i++) {
-			ItemStack stack = sourcePlayer.getInventory().getStack(i);
-			newPlayer.getInventory().setStack(i, stack.copy());
-		}
-
-		// Copy player attributes
-		newPlayer.setHealth(sourcePlayer.getHealth());
-		newPlayer.setExperienceLevel(sourcePlayer.experienceLevel);
-		newPlayer.setExperiencePoints(sourcePlayer.totalExperience);
-
-		// Spawn the player in the world
-		sourcePlayer.getServerWorld().spawnEntity(newPlayer);
-
-		// Properly handle player connection and visibility
-		ServerPlayNetworkHandler networkHandler = new ServerPlayNetworkHandler(
-				sourcePlayer.getServer(),
-				((ServerPlayerEntity)sourcePlayer).networkHandler.getConnection(),
-				newPlayer
-		);
-		newPlayer.networkHandler = networkHandler;
-
-		// Add player to the server's player list
-		sourcePlayer.getServer().getPlayerManager().createPlayer()
-		// Ensure all players are notified about the new player
-		sourcePlayer.getServer().getPlayerManager().sendToAll(
-				new PlayerListS2CPacket(PlayerListS2CPacket.Action.ADD_PLAYER, newPlayer)
-		);
-
-		// Spawn player for all nearby clients
-		ServerWorldAccessor worldAccessor = (ServerWorldAccessor)sourcePlayer.getServerWorld();
-		worldAccessor.getChunkManager().sendToNearbyPlayers(newPlayer,
-				new EntitySpawnS2CPacket(newPlayer));
-
-		// Optional: Log the player creation (if you want server-side logging)
-		sourcePlayer.getServer().getLogger().info("Created player copy: " + newPlayer.getGameProfile().getName());
-	}
 	// SpectateData class remains the same
 	private static class SpectateData {
 		public final Vec3d position;
