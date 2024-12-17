@@ -9,12 +9,15 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameMode;
 import net.minecraft.world.TeleportTarget;
+import net.minecraft.world.World;
 
 import java.util.HashMap;
 import java.util.List;
@@ -91,39 +94,44 @@ public class SpectatorMod implements ModInitializer {
     }
 
     private void startSpectating(ServerPlayerEntity source, ServerPlayerEntity target) {
+        GameMode sourceGamemode=GameMode.SURVIVAL;
+        if (source.isSpectator()){
+            sourceGamemode=GameMode.SPECTATOR;
+        }
+        if (source.isCreative()){
+            sourceGamemode=GameMode.CREATIVE;
+        }
         SpectateData spectateData = new SpectateData(
                 source.getPos(),
                 source.getYaw(),
                 source.getPitch(),
                 source.getWorld().getRegistryKey(),
                 target,
-                source.getVehicle(), // Save the current vehicle
-                source.getInventory().main // Save inventory
+                source.getVehicle(),
+                sourceGamemode
+
         );
         if (source.getVehicle() != null) {
             source.stopRiding();
         }
-        source.getInventory().clear();
+
 
 
         spectators.put(source, spectateData);
+        source.changeGameMode(GameMode.SPECTATOR);
 
-        // Wait for the target's world to load by scheduling a task
-        source.getServer().execute(() -> {
+        source.teleport(
+                target.getServerWorld(),
+                target.getX(),
+                target.getY(),
+                target.getZ(),
+                Set.of(),
+                target.getYaw(),
+                target.getPitch(),
+                false
+        );
 
-            source.teleport(
-                    target.getServerWorld(),
-                    target.getX(),
-                    target.getY(),
-                    target.getZ(),
-                    Set.of(),
-                    target.getYaw(),
-                    target.getPitch(),
-                    false
-            );
-            source.setCameraEntity(target);
-
-        });
+        source.setCameraEntity(target);
 
     }
 
@@ -135,33 +143,28 @@ public class SpectatorMod implements ModInitializer {
 
         // Restore the source player's camera and position
         SpectateData spectateData = spectators.remove(source);
+
         source.setCameraEntity(source);
-        source.getServer().execute(() -> {
-            source.teleportTo(
-                    new TeleportTarget(
-                            source.getServer().getWorld(spectateData.dimension),
-                            spectateData.position,
-                            Vec3d.ZERO,
-                            spectateData.yaw,
-                            spectateData.pitch,
-                            Set.of(),
-                            TeleportTarget.NO_OP
+
+        source.teleportTo(
+                new TeleportTarget(
+                        source.getServer().getWorld(spectateData.dimension),
+                        spectateData.position,
+                        Vec3d.ZERO,
+                        spectateData.yaw,
+                        spectateData.pitch,
+                        Set.of(),
+                        TeleportTarget.NO_OP
 
 
-                    )
-            );
+                )
+        );
 
-            //TODO: wait the dimension to load
-            if (spectateData.vehicle != null) {
-                source.startRiding(spectateData.vehicle, true);
-            }
-            //TODO: restore the inventory
-            source.getInventory().clear();
-            for (ItemStack item : spectateData.inventory) {
-                source.getInventory().insertStack(item);
-            }
-        });
 
+        source.changeGameMode(spectateData.gameMode);
+        if (spectateData.vehicle != null) {
+            source.startRiding(spectateData.vehicle, true);
+        }
 
     }
 
@@ -169,19 +172,19 @@ public class SpectatorMod implements ModInitializer {
         public final Vec3d position;
         public final float yaw;
         public final float pitch;
-        public final net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension;
+        public final RegistryKey<World> dimension;
         public final ServerPlayerEntity target;
         public final Entity vehicle;
-        public final List<ItemStack> inventory;
+        public final GameMode gameMode;
 
         public SpectateData(
                 Vec3d position,
                 float yaw,
                 float pitch,
-                net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                RegistryKey<World> dimension,
                 ServerPlayerEntity target,
                 Entity vehicle,
-                List<ItemStack> inventory
+                GameMode gameMode
         ) {
             this.position = position;
             this.yaw = yaw;
@@ -189,7 +192,7 @@ public class SpectatorMod implements ModInitializer {
             this.dimension = dimension;
             this.target = target;
             this.vehicle = vehicle;
-            this.inventory = inventory;
+            this.gameMode = gameMode;
         }
     }
 }
