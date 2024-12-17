@@ -9,6 +9,8 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -16,9 +18,8 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.TeleportTarget;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class SpectatorMod implements ModInitializer {
 
@@ -115,29 +116,45 @@ public class SpectatorMod implements ModInitializer {
     }
 
     private void startSpectating(ServerPlayerEntity source, ServerPlayerEntity target) {
-        // Save the source player's current position and store it in the map
         SpectateData spectateData = new SpectateData(
                 source.getPos(),
                 source.getYaw(),
                 source.getPitch(),
                 source.getWorld().getRegistryKey(),
-                target
+                target,
+                source.getVehicle(), // Save the current vehicle
+                source.getInventory().main // Save inventory
         );
+        if (source.getVehicle() != null) {
+            source.stopRiding();
+        }
+        source.getInventory().clear();
+
 
         spectators.put(source, spectateData);
 
-        source.teleportTo(
-                new TeleportTarget(
-                        target.getServerWorld(),
-                        spectateData.position,
-                        Vec3d.ZERO,
-                        target.getYaw(),
-                        target.getPitch(),
-                        Set.of(),
-                        TeleportTarget.NO_OP
+        // Use CompletableFuture to ensure dimension is loaded
+        CompletableFuture<Void> dimensionLoadFuture = new CompletableFuture<>();
 
+        source.getServer().executeSync(() -> {
+                    source.teleport(
+                            target.getServerWorld(),
+                            0,
+                            0,
+                            0,
+                            Set.of(),
+                            target.getYaw(),
+                            target.getPitch(),
+                            false
+                    );
 
-                )
+                    // Wait a short tick to ensure complete loading
+                    source.getServer().executeSync(() -> {
+                        // Set camera entity
+                        source.setCameraEntity(target);
+                        dimensionLoadFuture.complete(null);
+                    });
+                }
         );
 
 
@@ -155,42 +172,64 @@ public class SpectatorMod implements ModInitializer {
         // Restore the source player's camera and position
         SpectateData spectateData = spectators.remove(source);
         source.setCameraEntity(source);
-        source.teleportTo(
-                new TeleportTarget(
-                        source.getServer().getWorld(spectateData.dimension),
-                        spectateData.position,
-                        Vec3d.ZERO,
-                        spectateData.yaw,
-                        spectateData.pitch,
-                        Set.of(),
-                        TeleportTarget.NO_OP
+
+        // Use CompletableFuture to ensure dimension is loaded
+        CompletableFuture<Void> dimensionLoadFuture = new CompletableFuture<>();
+
+        source.getServer().executeSync(() -> {
+            // Teleport to target's world and position
+            source.teleportTo(
+                    new TeleportTarget(
+                            source.getServer().getWorld(spectateData.dimension),
+                            spectateData.position,
+                            Vec3d.ZERO,
+                            spectateData.yaw,
+                            spectateData.pitch,
+                            Set.of(),
+                            TeleportTarget.NO_OP
 
 
-                )
-        );
+                    )
+            );
+
+            // Wait a short tick to ensure complete loading
+            source.getServer().executeSync(() -> {
+                if (spectateData.vehicle != null) {
+                    source.startRiding(spectateData.vehicle, true);
+                }
+                //source.getInventory().main.add(spectateData.inventory);
+                dimensionLoadFuture.complete(null);
+            });
+        });
+
 
     }
 
-    // SpectateData class remains the same
     private static class SpectateData {
         public final Vec3d position;
         public final float yaw;
         public final float pitch;
         public final net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension;
         public final ServerPlayerEntity target;
+        public final Entity vehicle;
+        public final List<ItemStack> inventory;
 
         public SpectateData(
                 Vec3d position,
                 float yaw,
                 float pitch,
                 net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
-                ServerPlayerEntity target
+                ServerPlayerEntity target,
+                Entity vehicle,
+                List<ItemStack> inventory
         ) {
             this.position = position;
             this.yaw = yaw;
             this.pitch = pitch;
             this.dimension = dimension;
             this.target = target;
+            this.vehicle = vehicle;
+            this.inventory = inventory;
         }
     }
 }
