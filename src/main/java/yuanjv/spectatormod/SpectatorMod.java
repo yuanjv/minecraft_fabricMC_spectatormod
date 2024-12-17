@@ -120,10 +120,8 @@ public class SpectatorMod implements ModInitializer {
                             target.getPitch(),
                             false
                     );
-                    source.getServer().executeSync(() -> {
-                        source.setCameraEntity(target);
-                    });
                 }
+                source.setCameraEntity(target);
             }
         });
 
@@ -150,22 +148,6 @@ public class SpectatorMod implements ModInitializer {
         }
         source.changeGameMode(GameMode.SPECTATOR);
 
-        source.teleport(
-                target.getServerWorld(),
-                target.getX(),
-                target.getY(),
-                target.getZ(),
-                Set.of(),
-                target.getYaw(),
-                target.getPitch(),
-                false
-        );
-        // Delay setting camera entity to ensure dimension transfer is complete
-        source.getServer().executeSync(() -> {
-            source.setCameraEntity(target);
-        });
-
-        //prevent race
         spectators.put(source, spectateData);
 
     }
