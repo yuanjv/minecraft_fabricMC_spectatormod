@@ -1,98 +1,124 @@
 package yuanjv.spectatormod;
 
-
-
-import net.minecraft.nbt.NbtCompound;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkSide;
-import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
-import net.minecraft.server.network.ConnectedClientData;
-import net.minecraft.server.network.ServerPlayNetworkHandler;
-import net.minecraft.server.network.ServerPlayerEntity;
-import com.mojang.authlib.GameProfile;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
-import javax.crypto.Cipher;
 import java.util.UUID;
 
-public class BotPlayerEntity extends ServerPlayerEntity {
+public class BotPlayerEntity extends ServerPlayer {
+    private final ServerPlayer originalPlayer;
 
-    public BotPlayerEntity(ServerPlayerEntity spawner) {
-        super(spawner.getServer(), spawner.getServerWorld(), createBotGameProfile(spawner), SyncedClientOptions.createDefault());
+    public BotPlayerEntity(ServerPlayer spawner) {
+        super(
+                spawner.getServer(),
+                spawner.serverLevel(),
+                createBotGameProfile(spawner),
+                ClientInformation.createDefault()
+        );
+        this.originalPlayer = spawner;
 
-        // Clone entire player data via NBT
-        clonePlayerData(spawner);
-
-        this.networkHandler=new DummyNetworkHandler(this);
+        // Setup bot player
+        setupBotPlayer(spawner);
     }
 
-    private static GameProfile createBotGameProfile(ServerPlayerEntity spawner) {
-        // Create a new game profile with a new UUID, but similar name
-        return new GameProfile(UUID.randomUUID(), spawner.getGameProfile().getName() + "_Bot");
-    }
-    static class DummyNetworkHandler extends ServerPlayNetworkHandler {
-        public DummyNetworkHandler(ServerPlayerEntity player) {
-            super(
-                    player.getServer(),
-                    new ClientConnection(NetworkSide.SERVERBOUND) {
-                        @Override
-                        public void setupEncryption(Cipher decryptionCipher, Cipher encryptionCipher) {
-                            // Override to prevent null channel issues
-                        }
+    private void setupBotPlayer(ServerPlayer spawner) {
+        // Copy player's position and rotation
+        this.setPos(spawner.getX(), spawner.getY(), spawner.getZ());
+        this.setXRot(spawner.getXRot());
+        this.setYRot(spawner.getYRot());
+        this.setYHeadRot(spawner.getYHeadRot());
 
-                        @Override
-                        public boolean isOpen() {
-                            return false; // Simulate a closed connection for the bot
-                        }
-                    },
-                    player,
-                    ConnectedClientData.createDefault(player.getGameProfile(), false)
-            );
-        }
+        // Copy game mode
+        this.gameMode.changeGameModeForPlayer(spawner.gameMode.getGameModeForPlayer());
 
-        @Override
-        public void sendPacket(net.minecraft.network.packet.Packet<?> packet) {
-            // Override to prevent null pointer exceptions when sending packets
-            // You can add logging or additional handling here if needed
-        }
+        // Copy abilities
+        this.getAbilities().flying = spawner.getAbilities().flying;
 
-        @Override
-        public void disconnect(Text reason) {
-            // Override disconnect to prevent network-related errors
-            player.remove(RemovalReason.DISCARDED);
-        }
+        // Spawn the bot
+        spawnBotPlayer();
     }
 
+    private void spawnBotPlayer() {
+        MinecraftServer server = this.getServer();
+        ServerLevel world = this.serverLevel();
 
-        private void clonePlayerData(ServerPlayerEntity spawner) {
-        // Write spawner's data to an NBT compound
-        NbtCompound spawnerNbt = new NbtCompound();
-        spawner.writeNbt(spawnerNbt);
+        // Create a fake client connection
+        ClientConnection fakeConnection = new ClientConnection(NetworkSide.SERVERBOUND);
 
-        // Remove UUID to ensure a new unique identifier
-        spawnerNbt.remove("UUID");
+        // Place the new player
+        server.getPlayerList().placeNewPlayer(
+                fakeConnection,
+                this,
+                new CommonListenerCookie(
+                        this.getGameProfile(),
+                        0,
+                        this.clientInformation(),
+                        false
+                )
+        );
 
-        // Read the NBT data into the bot, effectively cloning most attributes
-        readNbt(spawnerNbt);
+        // Broadcast player info
+        server.getPlayerList().broadcastAll(
+                new ClientboundRotateHeadPacket(this, (byte) (this.getYHeadRot() * 256 / 360)),
+                this.level().dimension()
+        );
     }
 
-    @Override
-    public boolean isSpectator() {
-        // Prevent bot from being counted in player list
-        return true;
+    private static GameProfile createBotGameProfile(ServerPlayer spawner) {
+        // Create a new game profile with a unique UUID and similar name
+        return new GameProfile(
+                UUID.randomUUID(),
+                spawner.getGameProfile().getName() + "_Bot"
+        );
     }
 
     @Override
     public void tick() {
-        super.tick(); // Run the default tick behavior
+        // Periodic position reset and chunk management
+        if (this.getServer().getTickCount() % 10 == 0) {
+            this.connection.resetPosition();
+            this.serverLevel().getChunkSource().move(this);
+        }
 
-        // Check if the bot is dead and remove it
-        if (this.isDead()) {
-            this.server.execute(() -> {
-                System.out.println(this.getGameProfile().getName() + " has been removed after death.");
-                this.remove(RemovalReason.KILLED);  // Safely remove the bot entity
-            });
+        // Standard player tick
+        super.tick();
+    }
+
+    @Override
+    public void die(DamageSource cause) {
+        // Handle bot player death
+        super.die(cause);
+        this.remove(RemovalReason.KILLED);
+    }
+
+    @Override
+    public void onEquipItem(EquipmentSlot slot, ItemStack previous, ItemStack stack) {
+        // Prevent unnecessary item equip actions
+        if (!this.isUsingItem()) {
+            super.onEquipItem(slot, previous, stack);
         }
     }
-}
 
+    @Override
+    public boolean isSpectator() {
+        // Ensure bot is treated as a spectator
+        return true;
+    }
+
+    // Optional: Custom disconnect handling
+    public void disconnectBot(Component reason) {
+        this.connection.onDisconnect(new DisconnectionDetails(reason));
+    }
+}
