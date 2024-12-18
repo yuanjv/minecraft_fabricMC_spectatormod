@@ -121,7 +121,10 @@ public class SpectatorMod implements ModInitializer {
                             false
                     );
                 }
-                source.setCameraEntity(target);
+
+                if (!source.getPos().equals(target.getPos())) {
+                    source.setCameraEntity(target);
+                }
             }
         });
 
