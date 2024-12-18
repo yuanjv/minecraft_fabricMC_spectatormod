@@ -12,6 +12,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Vec3d;
@@ -110,6 +111,7 @@ public class SpectatorMod implements ModInitializer {
 
                 // Check if target's dimension or position has changed
                 if (!target.getWorld().getRegistryKey().equals(source.getWorld().getRegistryKey())) {
+
                     source.teleport(
                             target.getServerWorld(),
                             target.getX(),
@@ -120,11 +122,14 @@ public class SpectatorMod implements ModInitializer {
                             target.getPitch(),
                             false
                     );
+                    // Schedule the setCameraEntity() to run on the next tick
+                    ((ServerWorld) source.getWorld()).getServer().submit(() -> {
+                        source.setCameraEntity(target);
+                    });
+
+
                 }
 
-                if (!source.getPos().equals(target.getPos())) {
-                    source.setCameraEntity(target);
-                }
             }
         });
 
@@ -150,6 +155,8 @@ public class SpectatorMod implements ModInitializer {
             source.stopRiding();
         }
         source.changeGameMode(GameMode.SPECTATOR);
+
+        source.getServerWorld().getChunkManager().upda
 
         spectators.put(source, spectateData);
 
