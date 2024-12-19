@@ -66,6 +66,7 @@ public class SpectatorMod implements ModInitializer {
                                 sourcePlayer.sendMessage(Text.literal("Now spectating " + targetPlayer.getName().getString() + "."), false);
                                 return 1;
                             })));
+
         });
 
         // Handle player disconnection to reset spectate state
@@ -110,9 +111,8 @@ public class SpectatorMod implements ModInitializer {
                     continue;
                 }
 
-                // Check if target's dimension or position has changed
+                // Check if target's dimension has changed
                 if (!target.getWorld().getRegistryKey().equals(source.getWorld().getRegistryKey())) {
-                    /*
                     source.teleport(
                             target.getServerWorld(),
                             target.getX(),
@@ -123,7 +123,6 @@ public class SpectatorMod implements ModInitializer {
                             target.getPitch(),
                             false
                     );
-                     */
                     source.setCameraEntity(target);
 
 
@@ -154,6 +153,18 @@ public class SpectatorMod implements ModInitializer {
             source.stopRiding();
         }
         source.changeGameMode(GameMode.SPECTATOR);
+
+        source.teleport(
+                target.getServerWorld(),
+                target.getX(),
+                target.getY(),
+                target.getZ(),
+                Set.of(),
+                target.getYaw(),
+                target.getPitch(),
+                false
+        );
+        source.setCameraEntity(target);
 
 
         spectators.put(source, spectateData);
