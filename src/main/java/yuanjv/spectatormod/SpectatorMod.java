@@ -131,8 +131,11 @@ public class SpectatorMod implements ModInitializer {
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(
                 server -> {
-                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                        stopSpectating(player);
+                    for (ServerPlayerEntity source : server.getPlayerManager().getPlayerList()) {
+                        if (spectators.containsKey(source)) {
+                            forceStopSpectating(source);
+
+                        }
                     }
                 }
         );
@@ -181,11 +184,18 @@ public class SpectatorMod implements ModInitializer {
             source.sendMessage(Text.literal("You are not currently spectating anyone."), false);
             return;
         }
+        if (source.getServer().isRunning()) {
+            // Restore the source player's camera and position
+            forceStopSpectating(source);
+        }
 
-        // Restore the source player's camera and position
+    }
+
+    private void forceStopSpectating(ServerPlayerEntity source) {
         SpectateData spectateData = spectators.remove(source);
 
         source.setCameraEntity(source);
+
 
         source.teleportTo(
                 new TeleportTarget(
@@ -201,15 +211,11 @@ public class SpectatorMod implements ModInitializer {
                 )
         );
 
-
         source.changeGameMode(spectateData.gameMode);
 
-        source.getServer().executeSync(() -> {
-            if (spectateData.vehicle != null) {
-                source.startRiding(spectateData.vehicle, true);
-            }
-        });
-
+        if (spectateData.vehicle != null) {
+            source.startRiding(spectateData.vehicle, true);
+        }
     }
 
     private static class SpectateData {
