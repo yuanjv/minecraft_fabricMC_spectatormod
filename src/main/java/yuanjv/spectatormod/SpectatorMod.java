@@ -112,15 +112,16 @@ public class SpectatorMod implements ModInitializer {
 
                 // Check if target's dimension has changed
                 if (!target.getWorld().getRegistryKey().equals(source.getWorld().getRegistryKey())) {
-                    source.teleport(
-                            target.getServerWorld(),
-                            target.getX(),
-                            target.getY(),
-                            target.getZ(),
-                            Set.of(),
-                            target.getYaw(),
-                            target.getPitch(),
-                            false
+                    source.teleportTo(
+                            new TeleportTarget(
+                                    target.getServerWorld(),
+                                    spectateData.position,
+                                    Vec3d.ZERO,
+                                    target.getYaw(),
+                                    target.getPitch(),
+                                    Set.of(),
+                                    TeleportTarget.NO_OP
+                            )
                     );
                     source.setCameraEntity(target);
 
@@ -133,6 +134,8 @@ public class SpectatorMod implements ModInitializer {
                 server -> {
                     for (ServerPlayerEntity source : server.getPlayerManager().getPlayerList()) {
                         if (spectators.containsKey(source)) {
+                            // prevent client crashes from too many package
+                            source.networkHandler.disableFlush();
                             forceStopSpectating(source);
 
                         }
@@ -163,15 +166,18 @@ public class SpectatorMod implements ModInitializer {
         }
         source.changeGameMode(GameMode.SPECTATOR);
 
-        source.teleport(
-                target.getServerWorld(),
-                target.getX(),
-                target.getY(),
-                target.getZ(),
-                Set.of(),
-                target.getYaw(),
-                target.getPitch(),
-                false
+        source.teleportTo(
+                new TeleportTarget(
+                        target.getServerWorld(),
+                        spectateData.position,
+                        Vec3d.ZERO,
+                        target.getYaw(),
+                        target.getPitch(),
+                        Set.of(),
+                        TeleportTarget.NO_OP
+
+
+                )
         );
         source.setCameraEntity(target);
 
