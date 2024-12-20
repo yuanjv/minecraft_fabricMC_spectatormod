@@ -3,6 +3,7 @@ package yuanjv.spectatormod;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
@@ -128,6 +129,13 @@ public class SpectatorMod implements ModInitializer {
 
             }
         });
+        ServerLifecycleEvents.SERVER_STOPPING.register(
+                server -> {
+                    for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                        stopSpectating(player);
+                    }
+                }
+        );
 
 
     }
